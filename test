@@ -1,0 +1,48 @@
+#!/bin/bash
+API='https://bgogo.com/api'
+CURL='/usr/bin/curl'
+
+curl() {
+  if [[ ! -x "${CURL}" ]]; then
+    echo "${CURL} is not executable" 1>&2
+    exit 1
+  fi
+  "${CURL}" -s -H 'Accept: application/json' "$@"
+}
+
+send_security_code() {
+  curl -X POST -d "{\"email\":\"$1\"}" "${API}/send-security-code"
+}
+
+sign_in() {
+  curl -X POST -d "{\"email\":\"$1\",\"password\":\"$2\"}" "${API}/sign-in"
+}
+
+extract_token() {
+  grep -o -P '(?<="token":")[^"]+(?=")'
+}
+
+confirm_current_device() {
+  curl -X POST \
+       -d "{\"email\":\"$1\",\"password\":\"$2\",\"security_code\":\"$3\"}" \
+       "${API}/confirm-current-device"
+}
+
+get_balances() {
+  curl -H "Authorization: Bearer $1" "${API}/balances"
+}
+
+main() {
+  read -p 'Email: ' email
+  send_security_code "${email}"
+  echo 'Check email'
+  read -p 'Security code: ' code
+  read -s -p 'Password: ' password_cleartext
+  echo
+  password=$(echo -n "${password_cleartext}" | sha1sum | cut -d' ' -f1)
+  confirm_current_device "${email}" "${password}" "${code}"
+  token=$(sign_in "${email}" "${password}" | extract_token)
+  get_balances "${token}"
+}
+
+main "$@"
